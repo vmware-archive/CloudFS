@@ -1,0 +1,724 @@
+diff --git a/vim/hostd/hostsvc/hostsvcInt.h b/vim/hostd/hostsvc/hostsvcInt.h
+index 0404fe3..f43a558 100644
+--- a/vim/hostd/hostsvc/hostsvcInt.h
++++ b/vim/hostd/hostsvc/hostsvcInt.h
+@@ -81,11 +81,13 @@
+ #include "Vmodl/Vim/Host/VmfsVolume.h"
+ #include "Vmodl/Vim/Host/VfatVolume.h"
+ #include "Vmodl/Vim/Host/NasVolume.h"
++#include "Vmodl/Vim/Host/CloudVolume.h"
+ #include "Vmodl/Hostd/Host/FileSystemVolumeInfo.h"
+ #include "Vmodl/Hostd/Host/Vmfs.h"
+ #include "Vmodl/Hostd/Host/NasVolume.h"
+ #include "Vmodl/Hostd/Host/NasVolumeInfo.h"
+ #include "Vmodl/Hostd/Host/VfatVolume.h"
++#include "Vmodl/Hostd/Host/CloudVolume.h"
+ #include "Vmodl/Hostd/Host/FileSystemBackingInfo.h"
+ #include "provider/NetworkSimulator.h"
+ #include "DVPortMgr.h"
+diff --git a/vim/hostd/hostsvc/impl/Datastore.cpp b/vim/hostd/hostsvc/impl/Datastore.cpp
+index e0f3be0..4883535 100644
+--- a/vim/hostd/hostsvc/impl/Datastore.cpp
++++ b/vim/hostd/hostsvc/impl/Datastore.cpp
+@@ -64,6 +64,7 @@
+ #include "Vmodl/Vim/Host/NasVolume.h"
+ #include "Vmodl/Vim/Host/VmfsDatastoreInfo.h"
+ #include "Vmodl/Vim/Host/NasDatastoreInfo.h"
++#include "Vmodl/Vim/Host/CloudDatastoreInfo.h"
+ #include <Vmodl/Vim/KeyValue.h>
+ #include <Vmodl/Vim/UpdateVirtualMachineFilesResult.h>
+ #include "Vmodl/Vim/Fault/NotFound.h"
+@@ -2147,6 +2148,163 @@ GetIormConfigurationLocked(
+    }
+ }
+ 
++/**
++ *-----------------------------------------------------------------------------
++ *
++ * CloudDatastoreImpl::GetInfoLocked --
++ *
++ *      Internal function to get information about the cloudfs datastore.
++ *
++ * @param  result [out] datastore information.
++ *
++ *-----------------------------------------------------------------------------
++ */
++
++//XXX Verify correctness.
++void
++CloudDatastoreImpl::GetInfoLocked(Ref<Datastore::Info>& result /* OUT */)
++{
++   VmacoreAssert(_datastoreSystem->IsWriteLocked());
++   VmacoreAssert(_provider->IsLocked());
++ 
++   Ref<FileSystemMountInfo> fsMountInfo;
++   ConvertHostd2VimFSVolume(_volume, fsMountInfo);
++   Ref<CloudVolume> thatfs = NarrowToType<CloudVolume>(fsMountInfo->GetVolume());
++   int64 maxFileSize = (int64) MAX_INT64;
++   string url = _volume->GetPath();
++
++   result = new CloudDatastoreInfo(_name,
++                                     url, //url,
++                                     3, //available,
++                                     maxFileSize, //maxFileSize,
++                                    _volume->GetLastRefresh(),
++                                    thatfs);
++}
++
++/**
++ *-----------------------------------------------------------------------------
++ *
++ * CloudDatastoreImpl::QueryInjectorWorkload
++ *
++ *      Get latest SDRS injection workload metric.
++ *
++ * @return workload metric structure
++ *
++ *-----------------------------------------------------------------------------
++ */
++HostdCommon::HaDatastore::InjectorWorkload
++CloudDatastoreImpl::QueryInjectorWorkload()
++{
++   HostdCommon::HaDatastore::InjectorWorkload result;
++
++   WriteSynchronized lock1(this);
++   Synchronized lock2(_provider);
++   std::string volumeName = _volume->GetName();
++
++   try {
++      return _provider->GetInjectorWorkload(volumeName);
++   } catch (Exception& e) {
++      Log(_logger,
++          Logger::verbose,
++          "GetInjectorWorkload failed: %1",
++          e.what());
++   }
++
++   return result;
++}
++
++
++
++/**
++ *-----------------------------------------------------------------------------
++ *
++ * CloudDatastoreImpl::GetCapability --
++ *
++ *      Internal function to get capability about a Cloudfs datastore
++ *
++ * @param  result [out] datastore information.
++ *
++ *-----------------------------------------------------------------------------
++ */
++
++//XXX Verify correctness
++void
++CloudDatastoreImpl::GetCapability(Ref<Vim::Datastore::Capability>& result) {
++   result = new Vim::Datastore::Capability();
++   result->SetDirectoryHierarchySupported(false);
++   result->SetRawDiskMappingsSupported(false);
++   /* Unconditionally set to true -- see PR313351 for details */
++   result->SetPerFileThinProvisioningSupported(true);
++   /* CloudDatastore is not supported by Storage IORM */
++   result->SetStorageIORMSupported(false);
++}
++
++
++/**
++ *-----------------------------------------------------------------------------
++ *
++ * CloudDatastoreImpl::GetIormConfiguration
++ *
++ *      Get configuration of storage I/O resource management for the datastore.
++ *
++ * @param  result [out] IORM configuration object
++ *
++ *-----------------------------------------------------------------------------
++ */
++//XXX Verify correctness
++void
++CloudDatastoreImpl::
++GetIormConfiguration(Ref<Vim::StorageResourceManager::IORMConfigInfo >& result)
++{
++   result = NULL;
++}
++
++
++/**
++ *-----------------------------------------------------------------------------
++ *
++ * CloudDatastoreImpl::GetIormConfigurationLocked
++ *
++ *      Get configuration of storage I/O resource management for the datastore
++ *      (non locking version).
++ *
++ * @param  result [out] IORM configuration object
++ *
++ *-----------------------------------------------------------------------------
++ */
++//XXX Verify correctness
++void
++CloudDatastoreImpl::
++GetIormConfigurationLocked(
++   Ref<Vim::StorageResourceManager::IORMConfigInfo >& result)
++{
++   result = NULL;
++}
++
++
++/**
++ *-----------------------------------------------------------------------------
++ *
++ * CloudDatastoreImpl::SetIormConfiguration
++ *
++ *      Set configuration of storage I/O resource management for the datastore.
++ *      (internal)
++ *
++ * @param  configSpec [in] new IORM configuration spec
++ *
++ *-----------------------------------------------------------------------------
++ */
++//XXX Verify correctness
++void
++CloudDatastoreImpl::SetIormConfiguration(
++   const Vim::StorageResourceManager::IORMConfigSpec* configSpec)
++{
++   Log(_logger, Logger::info,
++       "Unsupported method called : %1", __FUNCTION__);
++   throw Vmomi::Fault::NotSupported::Exception();
++}
++
++
+ 
+ /**
+  *-----------------------------------------------------------------------------
+diff --git a/vim/hostd/hostsvc/impl/DatastoreInt.h b/vim/hostd/hostsvc/impl/DatastoreInt.h
+index a5b8b57..cdfc88f 100644
+--- a/vim/hostd/hostsvc/impl/DatastoreInt.h
++++ b/vim/hostd/hostsvc/impl/DatastoreInt.h
+@@ -20,6 +20,7 @@
+ #include "Vmodl/Vim/Host/FileSystemVolume.h"
+ #include "Vmodl/Vim/Host/VmfsVolume.h"
+ #include "Vmodl/Vim/Host/NasVolume.h"
++#include "Vmodl/Vim/Host/CloudVolume.h"
+ #include "Vmodl/Vim/VirtualMachine.h"
+ #include "DatastoreSystemInt.h"
+ #include "datastoreBrowserImpl.h"
+@@ -274,6 +275,53 @@ private:
+    void RefreshNameLocked();
+ };
+ 
++/*
++ *-----------------------------------------------------------------------------
++ *
++ * class CloudDatastoreImpl --
++ *
++ *      Implementation Cloud datastore managed object.
++ *
++ *-----------------------------------------------------------------------------
++ */
++
++class CloudDatastoreImpl : public DatastoreImpl {
++
++public:
++   CloudDatastoreImpl(Vmomi::MoRef *parent,
++                        DatastoreSystemImpl* system,
++                        Hostd::Host::CloudVolume* fs)
++   : DatastoreImpl(parent, system, fs) 
++   {}
++
++   static const char* s_FSBackingType() {
++      return "VSAN";
++   }
++
++   const char* GetFSBackingType() const {
++      return s_FSBackingType();
++   }
++
++   void GetInfoLocked(Vmacore::Ref<Vim::Datastore::Info>& result /* OUT */);
++   void GetCapability(Ref<Vim::Datastore::Capability>& result);
++
++   virtual void
++   GetIormConfiguration(Ref<Vim::StorageResourceManager::IORMConfigInfo>& result);
++   virtual void
++   GetIormConfigurationLocked(Ref<Vim::StorageResourceManager::IORMConfigInfo>& result);
++   virtual void
++   SetIormConfiguration(const Vim::StorageResourceManager::IORMConfigSpec* configSpec);
++   virtual InjectorWorkload QueryInjectorWorkload();
++
++private:
++   bool IsMissingBackendLocked() { return false; }
++   void RemoveBackendLocked() {}
++   void RenameBackendLocked(const std::string& name) {}
++   void RefreshLocked() {}
++   void RefreshNameLocked() {}
++};
++
++
+ } // namespace Hostsvc
+ 
+ #endif // _DATASTORE_INT_H
+diff --git a/vim/hostd/hostsvc/impl/DatastoreSystem.cpp b/vim/hostd/hostsvc/impl/DatastoreSystem.cpp
+index 2af0fe6..a6008ed 100644
+--- a/vim/hostd/hostsvc/impl/DatastoreSystem.cpp
++++ b/vim/hostd/hostsvc/impl/DatastoreSystem.cpp
+@@ -789,6 +789,7 @@ DatastoreSystemImpl::InitInventory(Config::View * configView)
+          this->ReconcileVMFSDatastoresLocked(true, false);
+          this->ReconcileNASDatastoresLocked(true);
+          this->ReconcileVfatDatastoresLocked(true);
++         this->ReconcileCloudDatastoresLocked(true);
+       }
+       this->UpdateConfigIssues(true);
+    }
+@@ -3480,6 +3481,47 @@ DatastoreSystemImpl::ReconcileNASDatastoresLocked(bool refresh)
+ }
+ 
+ 
++void
++DatastoreSystemImpl::ReconcileCloudDatastoresLocked(bool refresh)
++{
++   VmacoreAssert(this->IsWriteLocked());
++   VmacoreAssert(_provider->IsLocked());
++
++   int changes = 0;
++
++   Log(_logger, Logger::verbose,
++       "ReconcileCloudDatastores: Discovering new filesystem volumes.");
++
++   if (refresh) {
++      Log(_logger, Logger::trivia,
++          "ReconcileDatastores: Discover new volumes via refreshing caches.");
++      _provider->RefreshCloudVolumes();
++   }
++
++   // channel message for datastore changes if necessary
++   Ref<DatastoreSystemMsg> msg = new DatastoreSystemMsg;
++
++   DataArray<Hostd::Host::CloudVolume> *cloud = _provider->GetCloud();
++   if (cloud) {
++      Log(_logger, Logger::error,
++          "ReconcileDatastores: non-empty Cloud DataArray.");
++      changes += DiscoverNewDatastores<Hostd::Host::CloudVolume>(cloud, msg);
++   } else {
++      Log(_logger, Logger::error,
++          "ReconcileDatastores: NULL Cloud DataArray.");
++   }
++
++   if (msg->HasChange()) {
++      _dsNotifier->Post(msg, true);
++      Log(_logger, Logger::error, "DatastoreSystem: post %1.", msg->ToString());
++      UpdateConfigIssues();
++   }
++
++   Log(_logger, Logger::verbose,
++       "ReconcileCloudDatastores: Done discovering new filesystem volumes.");
++}
++
++
+ /**
+  *-----------------------------------------------------------------------------
+  *
+@@ -3669,6 +3711,10 @@ DatastoreSystemImpl::CreateDatastoreInt(Hostd::Host::FileSystemVolume *fs,
+       out = new NasDatastoreImpl(GetDatastoreFolderRef(),
+                                  this,
+                                  NarrowToType<Hostd::Host::NasVolume>(fs));
++   } else if (fs->_GetType() == GetType<Hostd::Host::CloudVolume>()) {
++      out = new CloudDatastoreImpl(GetDatastoreFolderRef(),
++                                 this,
++                                 NarrowToType<Hostd::Host::CloudVolume>(fs));
+    } else {
+       VmacoreNotReached();
+    }
+diff --git a/vim/hostd/hostsvc/impl/DatastoreSystemInt.h b/vim/hostd/hostsvc/impl/DatastoreSystemInt.h
+index 7fb0e3e..8dbbb3f 100644
+--- a/vim/hostd/hostsvc/impl/DatastoreSystemInt.h
++++ b/vim/hostd/hostsvc/impl/DatastoreSystemInt.h
+@@ -27,6 +27,7 @@ namespace Hostsvc {
+ class DatastoreImpl;
+ class VmfsDatastoreImpl;
+ class NasDatastoreImpl;
++class CloudDatastoreImpl;
+ 
+ /**
+  *-----------------------------------------------------------------------------
+@@ -44,6 +45,7 @@ public:
+    friend class DatastoreImpl;
+    friend class VmfsDatastoreImpl;
+    friend class NasDatastoreImpl;
++   friend class CloudDatastoreImpl;
+ 
+    DatastoreSystemImpl(Vmacore::Service::Logger *logger, 
+                        const std::string& id, 
+@@ -90,6 +92,8 @@ public:
+                             Vmacore::Ref<Vmomi::MoRef>& result /* OUT */);
+    void CreateNasDatastore(Vim::Host::NasVolume::Specification *spec, 
+                            Vmacore::Ref<Vmomi::MoRef>& result /* OUT */);
++   void CreateCloudDatastore(Vim::Host::CloudVolume::Specification *spec, 
++                           Vmacore::Ref<Vmomi::MoRef>& result /* OUT */);
+    void CreateLocalDatastore(const Vmomi::String& name, 
+                              const Vmomi::String& path, 
+                              Vmacore::Ref<Vmomi::MoRef>& result /* OUT */)
+@@ -190,6 +194,9 @@ private:
+    void ReconcileNASDatastoresLocked(bool refresh);
+    void ReconcileVfatDatastoresLocked(bool refresh);
+    void RefetchVMFSDatastores();
++
++   void ReconcileCloudDatastoresLocked(bool refresh);
++
+    int ExpungeMissingDatastores(const char* type,
+                                 HostdCommon::DatastoreSystemMsg* msg);
+    template<class T> int DiscoverNewDatastores(
+diff --git a/vim/hostd/hostsvc/provider/FSVolumeProvider.h b/vim/hostd/hostsvc/provider/FSVolumeProvider.h
+index de59581..0651430 100644
+--- a/vim/hostd/hostsvc/provider/FSVolumeProvider.h
++++ b/vim/hostd/hostsvc/provider/FSVolumeProvider.h
+@@ -31,6 +31,7 @@
+ #include "Vmodl/Hostd/Host/Vmfs.h"
+ #include "Vmodl/Hostd/Host/NasVolume.h"
+ #include "Vmodl/Hostd/Host/VfatVolume.h"
++#include "Vmodl/Hostd/Host/CloudVolume.h"
+ #include "Vmodl/Vim/Host/UnresolvedVmfsVolume.h"
+ #include "Vmodl/Vim/Host/UnresolvedVmfsExtent.h"
+ #include "Vmodl/Vim/Host/UnresolvedVmfsResolutionSpec.h"
+@@ -129,6 +130,8 @@ public:
+    virtual void RefreshNASVolumes() = 0;
+    virtual void RefreshOneNasVolume(const std::string& nasId, 
+                                     Vmacore::Ref<Hostd::Host::NasVolume>& nas){}
++   // cloudfs
++   virtual void RefreshCloudVolumes() = 0;
+ 
+    // vfat
+    virtual void RefreshVfatVolumes() = 0;
+@@ -164,6 +167,11 @@ public:
+       return &_allVfat;
+    }
+ 
++   Vmomi::DataArray<Hostd::Host::CloudVolume>* GetCloud() 
++   {
++      return &_allCloud;
++   }
++
+    virtual void GetUnresolvedVmfsVolumes(
+       Ref<Vmomi::DataArray< Vim::Host::UnresolvedVmfsVolume> >& result) {};
+     
+@@ -204,6 +212,7 @@ protected:
+    Vmomi::DataArray<Hostd::Host::Vmfs> _allVmfs;
+    Vmomi::DataArray<Hostd::Host::NasVolume> _allNas;
+    Vmomi::DataArray<Hostd::Host::VfatVolume> _allVfat;
++   Vmomi::DataArray<Hostd::Host::CloudVolume> _allCloud;
+    Vmacore::Ref<Vmacore::Service::Logger> _logger;   
+ 
+ };
+diff --git a/vim/hostd/hostsvc/provider/mockup/FSVolumeMockupInt.h b/vim/hostd/hostsvc/provider/mockup/FSVolumeMockupInt.h
+index 7ea0e51..8fedc6a 100644
+--- a/vim/hostd/hostsvc/provider/mockup/FSVolumeMockupInt.h
++++ b/vim/hostd/hostsvc/provider/mockup/FSVolumeMockupInt.h
+@@ -88,6 +88,10 @@ public:
+    {
+       InitLoadMockup();
+    }
++   virtual void RefreshCloudVolumes() 
++   {
++      InitLoadMockup();
++   }
+ 
+    // vfat
+    virtual void RefreshVfatVolumes() {}
+diff --git a/vim/hostd/hostsvc/provider/vmkernel/FSVolumeVmkImpl.cpp b/vim/hostd/hostsvc/provider/vmkernel/FSVolumeVmkImpl.cpp
+index 70b7a86..c2283c4 100644
+--- a/vim/hostd/hostsvc/provider/vmkernel/FSVolumeVmkImpl.cpp
++++ b/vim/hostd/hostsvc/provider/vmkernel/FSVolumeVmkImpl.cpp
+@@ -743,6 +743,39 @@ FSVolumeVmkImplProvider::RefreshNASVolumes()
+    }
+ }
+ 
++/** 
++ *-----------------------------------------------------------------------------
++ *
++ * FSVolumeVmkImplProvider::RefreshCloudVolumes --
++ *
++ *  Create a single CloudVolume pointing to /vmfs/volumes/cloudfs
++ *
++ *-----------------------------------------------------------------------------
++ */
++
++void 
++FSVolumeVmkImplProvider::RefreshCloudVolumes()
++{
++   Log(_logger, Service::Logger::verbose, "RefreshCloudVolumes called");
++   VmacoreAssert(IsLocked());
++
++   Ref<Hostd::Host::CloudVolume> obj = new Hostd::Host::CloudVolume();
++   obj->SetId("cloudfs");
++   obj->SetName("cloudfs");
++   obj->SetType("cloudfs");
++   obj->SetPathAlias(new Array<String>());
++   obj->SetCapacity(0);
++
++   obj->SetPath("/vmfs/volumes/cloudfs/");
++   obj->SetCapacity(0x100000000000ULL);
++   obj->SetAvailable(0x100000000000ULL);
++   obj->SetAccessMode("readWrite");
++   obj->SetAccessible(true);
++   
++   _allCloud.Clear();
++   _allCloud.Append(obj);
++}
++
+ 
+ /**
+  *-----------------------------------------------------------------------------
+diff --git a/vim/hostd/hostsvc/provider/vmkernel/FSVolumeVmkInt.h b/vim/hostd/hostsvc/provider/vmkernel/FSVolumeVmkInt.h
+index f8e7427..c01fb99 100644
+--- a/vim/hostd/hostsvc/provider/vmkernel/FSVolumeVmkInt.h
++++ b/vim/hostd/hostsvc/provider/vmkernel/FSVolumeVmkInt.h
+@@ -97,6 +97,9 @@ public:
+    virtual HostdCommon::HaDatastore::InjectorWorkload GetInjectorWorkload(const std::string&);
+ 
+    virtual void AutomountVolumes();
++
++   // cloudfs
++   virtual void RefreshCloudVolumes();
+ private:
+    typedef HostConfigObjVmk<HostCtl::Storage::VmFileSystem> VmkVmfs;
+    typedef HostConfigObjVmk<HostCtl::Storage::NetworkFileSystem> VmkNas;
+diff --git a/vim/hostd/hostsvc/util.cpp b/vim/hostd/hostsvc/util.cpp
+index d73b009..553c7cb 100644
+--- a/vim/hostd/hostsvc/util.cpp
++++ b/vim/hostd/hostsvc/util.cpp
+@@ -905,6 +905,10 @@ ConvertHostd2VimFSVolume(Hostd::Host::FileSystemVolume *vol,
+       vimNas->SetRemotePath(hostdNas->GetRemotePath());
+ 
+       vimVolume = vimNas;
++   } else if (dynamic_cast<Hostd::Host::CloudVolume *>(vol) != NULL) {
++      Ref<Hostd::Host::CloudVolume> hostdCloud = NarrowToType<Hostd::Host::CloudVolume>(vol);
++      Ref<Vim::Host::CloudVolume> vimCloud = new Vim::Host::CloudVolume();
++      vimVolume = vimCloud; 
+    } else if (vol->_GetDataType()->IsA(GetDoType<Hostd::Host::Vmfs>())) {
+       Ref<Hostd::Host::Vmfs> hostdVmfs = NarrowToType<Hostd::Host::Vmfs>(vol);
+       Ref<Vim::Host::VmfsVolume> vimVmfs = new Vim::Host::VmfsVolume();
+diff --git a/vim/hostd/vmodl/hostd/host/FileSystemBackingInfo.java b/vim/hostd/vmodl/hostd/host/FileSystemBackingInfo.java
+index 56bf9fd..ad99158 100644
+--- a/vim/hostd/vmodl/hostd/host/FileSystemBackingInfo.java
++++ b/vim/hostd/vmodl/hostd/host/FileSystemBackingInfo.java
+@@ -54,7 +54,7 @@ import vmodl.*;
+     *
+     *  </dl>
+     */
+-   @constants enum FileSystemType { local, nfs, cifs };
++   @constants enum FileSystemType { local, nfs, cifs, vsan };
+    
+    /** FileSystemType of this particular backing */
+    String type;
+diff --git a/vim/hostd/vmodl/hostd/host/FileSystemVolumeInfo.java b/vim/hostd/vmodl/hostd/host/FileSystemVolumeInfo.java
+index b6bec9b..69f603b 100644
+--- a/vim/hostd/vmodl/hostd/host/FileSystemVolumeInfo.java
++++ b/vim/hostd/vmodl/hostd/host/FileSystemVolumeInfo.java
+@@ -7,6 +7,8 @@ import vmodl.*;
+ import vim.version.version5;
+ import vim.host.ScsiDisk;
+ import vim.host.ForceMountedInfo;
++import vim.version.*;
++import vim.version.dev.Feature;
+ 
+ 
+ /**
+@@ -83,7 +85,7 @@ import vim.host.ForceMountedInfo;
+     *
+     *  </dl>
+     */
+-   @constants enum FileSystemType { vmfs, nfs, cifs, other };
++   @constants enum FileSystemType { vmfs, nfs, cifs, vsan, other };
+ 
+    /** FileSystemType of this particular file system */
+    String type;
+@@ -218,6 +220,15 @@ import vim.host.ForceMountedInfo;
+    String remotePath;
+ };
+ 
++/**
++ *  This data object type describes the vSan volume.
++ */
++@dev(Feature.vsan)
++@data class CloudVolume extends FileSystemVolume {
++   /** vSan volume id */
++   String volumeId;
++};
++
+ 
+ /**
+  *  Local file system volume.
+diff --git a/vim/hostd/vmsvc/vmMisc.cpp b/vim/hostd/vmsvc/vmMisc.cpp
+index 2cad0fb..ef6b958 100755
+--- a/vim/hostd/vmsvc/vmMisc.cpp
++++ b/vim/hostd/vmsvc/vmMisc.cpp
+@@ -31,6 +31,7 @@ extern "C" {
+ #include "Vmodl/Vim/HostSystem.h"
+ #include "Vmodl/Vim/Host/Capability.h"
+ #include "Vmodl/Vim/Host/NasDatastoreInfo.h"
++#include "Vmodl/Vim/Host/CloudDatastoreInfo.h"
+ #include "Vmodl/Vim/Host/LocalDatastoreInfo.h"
+ #include "Vmodl/Vim/Host/VmfsDatastoreInfo.h"
+ #include "Vmodl/Vim/Host/VmfsVolume.h"
+@@ -1101,6 +1102,17 @@ VmMisc::IsSupportedVolume(Vmomi::MoRef *dsRef,
+             break;
+          }
+       }
++   } else if (dynamic_cast<Vim::Host::CloudDatastoreInfo *>(info.Ptr()) != NULL) {
++      Ref<Vim::Host::CloudDatastoreInfo> cloudInfo;
++      cloudInfo = NarrowToType<Vim::Host::CloudDatastoreInfo>(info.Ptr());
++      for (int i = 0; i < unsupportedVols->GetLength(); i++) {
++         Ref<DatastoreOption::FileSystemVolumeOption> fsOption;
++         fsOption = unsupportedVols->GetAt(i);
++         if (cloudInfo->_GetType()->GetName() == fsOption->GetFileSystemType()) {
++            unSupported = true;
++            break;
++         }
++      }
+    } else if (dynamic_cast<Vim::Host::LocalDatastoreInfo *>(info.Ptr()) != NULL) {
+       Ref<Vim::Host::LocalDatastoreInfo> localDsInfo;
+       localDsInfo = NarrowToType<Vim::Host::LocalDatastoreInfo>(info.Ptr());
+diff --git a/vim/hostd/vmsvc/vmsvc.cpp b/vim/hostd/vmsvc/vmsvc.cpp
+index 14716e1..318b0ad 100644
+--- a/vim/hostd/vmsvc/vmsvc.cpp
++++ b/vim/hostd/vmsvc/vmsvc.cpp
+@@ -811,6 +811,8 @@ VmsvcImpl::RegisterVm(const string& dsCfgPath,
+  *-----------------------------------------------------------------------------
+  */
+ 
++extern "C" void createCloudVolume(char *name);
++
+ void
+ VmsvcImpl::CreateVm(ConfigSpec *config,
+                     HostdCommon::HaFolder *parent,
+@@ -834,8 +836,24 @@ VmsvcImpl::CreateVm(ConfigSpec *config,
+       dsPath = config->GetFiles()->GetVmPathName().GetValue();
+       isFtSecondary = (config->GetFtInfo() != NULL && 
+ 		       config->GetFtInfo()->GetRole() >= 2);
+-      ComputeVmCfgPath(dsPath, config->GetName().GetValue(), isFtSecondary, 
+-		       localDsPath, cfgPath);
++
++#if 0
++      if (dsPath.compare("[cloudfs]")==0 ) {
++
++         localDsPath = "/vmfs/volumes/cloudfs";
++
++         char name[64];
++         createCloudVolume(name);
++
++         cfgPath = localDsPath + "/" + name + "/" + config->GetName().GetValue() + ".vmx";
++      }
++      else {
++#endif
++         ComputeVmCfgPath(dsPath, config->GetName().GetValue(), isFtSecondary, 
++               localDsPath, cfgPath);
++#if 0
++      }
++#endif
+ 		       
+       Ref<PathManager> pathMgr = GetPathManager();
+       Ref<MoRef> dsRef;
+diff --git a/vim/vmodl/vim/host/CloudVolume.java b/vim/vmodl/vim/host/CloudVolume.java
+new file mode 100644
+index 0000000..08cf00d
+--- /dev/null
++++ b/vim/vmodl/vim/host/CloudVolume.java
+@@ -0,0 +1,39 @@
++/* **********************************************************
++ * Copyright 2010 VMware, Inc.  All rights reserved. -- VMware Confidential
++ * **********************************************************/
++
++package vim.host;
++import vmodl.*;
++import vim.version.dev.Feature;
++import vim.version.*;
++
++/**
++ *  The vsan file system.
++ */
++@dev(Feature.vsan)
++@data public class CloudVolume extends FileSystemVolume {
++
++   /**
++    *  This data object type describes the CloudFS (vsan)
++    *  data store.
++    */
++
++   @dev(Feature.vsan)
++   @wsdlName("HostCloudSpec")
++   @data static public class Specification {
++
++      /** Volume name of vsan */
++      String volumeName;
++   }
++
++   /**  Major version number of vsan. */
++   int majorVersion;
++
++   /** Version string.  Contains major and minor version numbers. */
++   String version;
++
++   /** The universally unique identifier assigned to CloudFS. */
++   String uuid;
++};
++
++
+diff --git a/vim/vmodl/vim/host/DatastoreSystem.java b/vim/vmodl/vim/host/DatastoreSystem.java
+index fe75463..c31243e 100644
+--- a/vim/vmodl/vim/host/DatastoreSystem.java
++++ b/vim/vmodl/vim/host/DatastoreSystem.java
+@@ -35,6 +35,11 @@ import vim.fault.*;
+  *  Destroying the datastore detaches the volume from the host.
+  *  </dd>
+  *  <p>
++ *  <dt><b>Cloud Volume</b></dt>
++ *  <dd>
++ *  A datastore that is backed by a CloudFS storage device.
++ *  </dd>
++ *  <p>
+  *  <dt><b>VMFS</b></dt>
+  *  <dd>
+  *  A datastore that is backed by a VMware File System (VMFS) is created by
+@@ -503,6 +508,25 @@ import vim.fault.*;
+ 
+ }
+ 
++/**
++ *  Information details about a CloudFS (vsan) datastore.
++ */
++@dev(Feature.vsan)
++@wsdlName("CloudDatastoreInfo")
++@data class CloudDatastoreInfo extends vim.Datastore.Info {
++
++  /**
++   *  The CloudFS mount information for the datastore.  May not
++   *  be available when the datastore is not accessible.
++   */
++  @optional CloudVolume cloud;
++
++}
++
++
++
++
++
+ 
+ /**
+  *  The information details about a datastore that is local to a host.
+diff --git a/vim/vmodl/vim/version/dev.java b/vim/vmodl/vim/version/dev.java
+index 9a5af00..8c7c0bf 100644
+--- a/vim/vmodl/vim/version/dev.java
++++ b/vim/vmodl/vim/version/dev.java
+@@ -201,6 +201,12 @@ public @interface dev {
+       /** vCenter Server specific ER projects. Contact: sunair. */
+       vpxer,
+ 
++      /** VC URL translation. Contact: abose, ratanasov, spodskokniev */
++      vpxurl,
++
++      /** vsan. Cloudfs. Contact: jgorm */
++      vsan,
++
+       /** vService Manager. Contact: jmoeller */
+       vsm,
+ 

@@ -1,0 +1,821 @@
+diff --git a/lib/vmkctl/include/storage/CloudFileSystemImpl.h b/lib/vmkctl/include/storage/CloudFileSystemImpl.h
+new file mode 100644
+index 0000000..c1c4b8e
+--- /dev/null
++++ b/lib/vmkctl/include/storage/CloudFileSystemImpl.h
+@@ -0,0 +1,127 @@
++/* **********************************************************
++ * Copyright 2010 VMware, Inc.  All rights reserved.
++ * VMware Confidential
++ * **********************************************************/
++
++#ifndef _VMKCTL_STOR_CLOUDFILESYSTEMIMPL_H_
++#define _VMKCTL_STOR_CLOUDFILESYSTEMIMPL_H_
++
++#include "storage/CloudFileSystem.h"
++
++#include "storage/VmFileSystemImpl.h"
++#include "util/AttrUtil.h"
++
++namespace VmkCtl {
++namespace Storage {
++   
++   /*!
++    *  CloudFileSystemImpl --
++    * 
++    *    This is an implementation of the CloudFileSystem interface for ESX
++    *    Servers and the console os.
++    */
++   class CloudFileSystemImpl : 
++      public virtual HostCtl::Storage::CloudFileSystem,
++      public virtual VmFileSystemImpl
++   {
++   public:
++      CloudFileSystemImpl(std::string mountPoint) 
++         throw (HostCtl::Lib::HostCtlException);
++      CloudFileSystemImpl(const CloudFileSystemImpl& copy);
++      virtual ~CloudFileSystemImpl();
++      
++      GET_CHECK_REFRESH(bool, GetReadOnly, _readOnly);
++      
++      virtual std::vector<HostCtl::Storage::DiskLunPartition*> GetExtents() 
++         throw (HostCtl::Lib::HostCtlException);
++      virtual HostCtl::Storage::DiskLunPartition* GetHeadPartition() 
++         throw (HostCtl::Lib::HostCtlException);
++
++      virtual bool GetConfigReadOnly() throw (HostCtl::Lib::HostCtlException);
++      virtual void SetConfigReadOnly(bool readOnly) 
++         throw (HostCtl::Lib::HostCtlException);
++
++      virtual void AddExtent(std::string partition, 
++         uint32 numFiles = 0) throw (HostCtl::Lib::HostCtlException);
++
++      virtual void SetVolumeName(std::string volumeName) 
++         throw (HostCtl::Lib::HostCtlException);
++      
++      virtual void Unmount() throw (HostCtl::Lib::HostCtlException);
++      virtual void Mount() throw (HostCtl::Lib::HostCtlException);
++      virtual bool IsMounted() throw (HostCtl::Lib::HostCtlException);
++      virtual bool IsAccessible() throw (HostCtl::Lib::HostCtlException);
++      
++      virtual bool IsActiveVolume() throw (HostCtl::Lib::HostCtlException);
++      virtual std::vector<HostCtl::Network::MacAddress> GetActiveVolumeUsers() 
++         throw (HostCtl::Lib::HostCtlException);
++      virtual HostCtl::Storage::VAAIState GetVAAIState () 
++         throw (HostCtl::Lib::HostCtlException);
++
++      /*!
++       * \see HostCtl::Lib::HostCtlObject::Refresh
++       */
++      virtual void Refresh() throw (HostCtl::Lib::HostCtlException);
++
++      /*!
++       * \see HostCtl::Lib::HostCtlObject::GetName
++       */
++      virtual std::string GetName() const;
++
++      virtual void LoadConfig() throw (HostCtl::Lib::HostCtlException);
++
++      /*!
++       * \see VmkCtl::Lib::VmkCtlObject::Print
++       */
++      virtual void Print(Util::ObjectPrinter* printer) 
++         throw (HostCtl::Lib::HostCtlException);
++      
++      static const std::string NAS_TYPE;
++
++      static HostCtl::Storage::CloudFileSystem* AddCloudFileSystem(
++         std::string host, std::string share, std::string volumeLabel) 
++         throw (HostCtl::Lib::HostCtlException);
++      static void RemoveCloudFileSystem(std::string volumeLabel)
++         throw (HostCtl::Lib::HostCtlException);
++      
++      static bool LabelExists(std::string label) throw (HostCtl::Lib::HostCtlException);
++
++      virtual bool GetUnstableWrites() throw (HostCtl::Lib::HostCtlException);
++      virtual void SetUnstableWrites(bool unstable)
++         throw (HostCtl::Lib::HostCtlException);
++      virtual void GetStats(HostCtl::Storage::NASStats& stats)
++         throw (HostCtl::Lib::HostCtlException);
++      static void GetStats(std::string volumeName, HostCtl::Storage::NASStats& stats)
++         throw (HostCtl::Lib::HostCtlException);
++      virtual void GetWorldStats(uint32 worldID, HostCtl::Storage::NASStats& stats)
++         throw (HostCtl::Lib::HostCtlException);
++      virtual uint32 GetMaxQueueDepth()  throw (HostCtl::Lib::HostCtlException);
++      virtual void  SetMaxQueueDepth(uint32 qDepth)  throw (HostCtl::Lib::HostCtlException);
++#if 0
++      virtual HostCtl::Storage::CloudFileSystem::NFSIormState GetIormState() 
++         throw (HostCtl::Lib::HostCtlException);
++      virtual void SetIormState(NFSIormState state)  throw (HostCtl::Lib::HostCtlException);
++#endif
++      virtual uint32 GetLatencyThreshold()  throw (HostCtl::Lib::HostCtlException);
++      virtual void SetLatencyThreshold(uint32 value)  throw (HostCtl::Lib::HostCtlException);
++
++   private:
++      void Mount(bool remount) throw (HostCtl::Lib::HostCtlException);
++
++      static bool IsMounted(std::string labelName) 
++         throw (HostCtl::Lib::HostCtlException);
++      static void VerifyLabel(std::string labelName)
++         throw (HostCtl::Lib::HostCtlException);
++      static bool VsiExists(std::string labelName)
++         throw (HostCtl::Lib::HostCtlException);
++      
++      ConfigBranchPtr GetConfigLocation(ConfigFilePtr);
++
++      std::string _shareName;
++      std::string _remoteHost;
++      bool _readOnly;
++      std::string _remoteAddr;
++   };
++}
++}
++#endif //_VMKCTL_STOR_CLOUDFILESYSTEMIMPL_H_
+diff --git a/lib/vmkctl/storage/CloudFileSystemImpl.cpp b/lib/vmkctl/storage/CloudFileSystemImpl.cpp
+new file mode 100644
+index 0000000..51d4b15
+--- /dev/null
++++ b/lib/vmkctl/storage/CloudFileSystemImpl.cpp
+@@ -0,0 +1,650 @@
++/* *********************************************************
++ * Copyright 2010 VMware, Inc.  All rights reserved.
++ * VMware Confidential
++ * *********************************************************/
++
++extern "C" {
++#include "vmware.h"
++#include "gen_vmksysinfodefs.h"
++#include "vsiDefs.h"
++#include "nfs_vsi.h"
++#include <netdb.h>
++#include <arpa/inet.h>
++#include <unistd.h>
++}
++
++#include "storage/CloudFileSystemImpl.h"
++#include "network/VmKernelNicInfoImpl.h"
++#include "network/NetworkInfoImpl.h"
++#include "lib/NotImplementedException.h"
++#include "util/Sysinfo.h"
++
++using namespace std;
++using namespace VmkCtl::Lib;
++using namespace VmkCtl::Util;
++using namespace VmkCtl::Network;
++using namespace HostCtl::Storage;
++using namespace HostCtl::Network;
++using HostCtl::Network::Ipv4Address;
++using namespace HostCtl::Lib;
++
++namespace VmkCtl {
++namespace Storage {
++
++#if 0
++   /*!
++    * QueryVsi
++    *
++    *    Get the struct for a mount.  Don't expose this to the class interface
++    *    so we don't have to expose the VSI structs in the header
++    */
++   void
++   QueryVsi(NFSVsi_MountPropertyStruct& props, string volumeName)
++      throw (HostCtl::Lib::HostCtlException)
++   {
++      //Sysinfo mntProps(VSI_MODULE_NODE_mnt_properties);
++      //mntProps.SetModule("cloudfs");
++      //mntProps.SetInstance(volumeName);
++      //mntProps.Get((void *)&props, (uint32)sizeof(props));
++   }
++#endif
++
++   const string CloudFileSystemImpl::NAS_TYPE = "cloudfs";
++
++   CloudFileSystemImpl::CloudFileSystemImpl(string mountName) 
++      throw (HostCtl::Lib::HostCtlException) : VmFileSystemImpl(mountName)
++   {
++
++      _headExtent = "";
++      _blockSize = 0;
++      _totBlocks = 0;
++      _blocksUsed = 0;
++      _size = 0;
++      _usage = 0;
++      _lockMode = VMFS_LOCK_MODE_PUBLIC;
++      _type = NAS_TYPE;
++      _majorVer = 0;
++      _minorVer = 0;
++
++      if (_volumeName.empty()) {
++         VMKCTL_THROW(VmkCtlException, "Unable to create object, volume Name not valid")
++      }
++   }
++
++   CloudFileSystemImpl::CloudFileSystemImpl(
++      const CloudFileSystemImpl& copy) : VmFileSystemImpl(copy)
++   {
++      _remoteHost = copy._remoteHost;
++      _shareName = copy._shareName;
++   }
++
++   CloudFileSystemImpl::~CloudFileSystemImpl()
++   {
++   }
++
++   vector<DiskLunPartition*>
++   CloudFileSystemImpl::GetExtents() throw (HostCtl::Lib::HostCtlException)
++   {
++      //empty vector
++      vector<DiskLunPartition*> parts;
++      return parts;
++   }
++
++   DiskLunPartition*
++   CloudFileSystemImpl::GetHeadPartition() throw (HostCtl::Lib::HostCtlException)
++   {
++      //This is expected as there are no partitions
++      return NULL;
++   }
++
++   void
++   CloudFileSystemImpl::AddExtent(std::string partition, uint32 numFiles)
++      throw (HostCtl::Lib::HostCtlException)
++   {
++      VMKCTL_THROW_NOTIMPL()
++   }
++
++   void
++   CloudFileSystemImpl::Mount()
++      throw (HostCtl::Lib::HostCtlException)
++   {
++      Mount(false);
++   }
++
++   void
++   CloudFileSystemImpl::Mount(bool remount)
++      throw (HostCtl::Lib::HostCtlException)
++   {
++      CHECK_REFRESH()
++
++      ConfigFilePtr config = GetConfigFile();
++      config->Lock();
++
++      try {
++         ConfigBranchPtr curr = GetConfigLocation(config);
++
++         curr->SetValue("enabled", true);
++
++         config->Write();
++         config->Unlock();
++      }
++      catch (HostCtlException& e) {
++         config->Unlock();
++         throw;
++      }
++   }
++
++   void
++   CloudFileSystemImpl::Unmount() throw (HostCtl::Lib::HostCtlException)
++   {
++      ConfigFilePtr config = GetConfigFile();
++      config->Lock();
++
++      try {
++         ConfigBranchPtr curr = GetConfigLocation(config);
++
++         //UnmountInternal();
++
++         //its possible that there was a mount added through vsi or some other
++         //means.  Lets make sure before we save the unmount that the host and
++         //share exist.  Yes this drops the share on the ground, yes, this is
++         //correct.
++         string tmpStr;
++         if (curr->GetValue("host", &tmpStr) &&
++             curr->GetValue("share", &tmpStr)) {
++            curr->SetValue("enabled", false);
++         }
++         else {
++            VMKCTL_THROW(VmkCtlException, "Mount point label " + _volumeName
++               + " not found in configuration file.  Mount has been unmounted.")
++         }
++
++         config->Write();
++         config->Unlock();
++      }
++      catch (HostCtlException& e) {
++         config->Unlock();
++         throw;
++      }
++   }
++
++
++   bool
++   CloudFileSystemImpl::LabelExists(string labelName) throw (HostCtlException)
++   {
++      bool foundMount = false;
++
++      ConfigFilePtr config = GetConfigFile();
++      config->Lock();
++
++      try {
++         ConfigBranchPtr nasBase = config->GetBranch(NAS_CFG_KEY);
++
++         if (nasBase->HasBranch(labelName)) {
++            ConfigBranchPtr labelBase = nasBase->GetBranch(labelName);
++
++            string tmpHost;
++            if (labelBase->GetValue("host", &tmpHost)) {
++               foundMount = true;
++            }
++
++            if (VsiExists(labelName)) {
++               foundMount = true;
++            }
++         }
++
++         config->Unlock();
++      }
++      catch (HostCtlException& e) {
++         config->Unlock();
++         throw;
++      }
++
++      return foundMount;
++   }
++
++   void
++   CloudFileSystemImpl::VerifyLabel(string label) throw (HostCtlException)
++   {
++      if (label.size() == 0 || label.size() > 42) {
++         VMKCTL_THROW(VmkCtlException,
++            "Volume Label is too long/short, limit is 1 to 42 characters")
++      }
++
++      if (label.find('=') != string::npos ||
++          label.find('/') != string::npos ||
++          label.find(']') != string::npos ||
++          label.find('[') != string::npos) {
++         VMKCTL_THROW(VmkCtlException,
++            "Invalid character in mount.  Label cannot contain any of '/', ']', '[', '='")
++      }
++   }
++
++   CloudFileSystem*
++   CloudFileSystemImpl::AddCloudFileSystem(string hostName, string share,
++      string label) throw (HostCtl::Lib::HostCtlException)
++   {
++      VerifyLabel(label);
++
++      ConfigFilePtr config = GetConfigFile();
++      config->Lock();
++
++      try {
++         ConfigBranchPtr nasBase = config->GetBranch(NAS_CFG_KEY);
++
++         if (nasBase->HasBranch(label)) {
++            stringstream error;
++            error << "Unable to add new NAS, volume with the label ";
++            error << label;
++            error << " already exists";
++
++            VMKCTL_THROW(VmkCtlException, error.str())
++         }
++
++         ConfigBranchPtr newNas = nasBase->GetBranch(label);
++         newNas->SetValue("host", hostName);
++         newNas->SetValue("share", share);
++         newNas->SetValue("enabled", false);
++
++         config->Write();
++         config->Unlock();
++      }
++      catch (HostCtlException& e) {
++         config->Unlock();
++         throw;
++      }
++
++      return new CloudFileSystemImpl(VMFS_VOLUME_PATH + label);
++   }
++
++   void
++   CloudFileSystemImpl::RemoveCloudFileSystem(string label)
++      throw (HostCtl::Lib::HostCtlException)
++   {
++      ConfigFilePtr config = GetConfigFile();
++      config->Lock();
++
++      try {
++         ConfigBranchPtr nasBase = config->GetBranch(NAS_CFG_KEY);
++
++         bool cfgExists = nasBase->HasBranch(label);
++         bool vsiExists = VsiExists(label);
++
++         if (!cfgExists && !vsiExists) {
++            VMKCTL_THROW(VmkCtlException,
++               "Unknown filesystem, cannot remove")
++         }
++
++         if (vsiExists) {
++            CloudFileSystemImpl impl(VMFS_VOLUME_PATH + label);
++            impl.Unmount();
++         }
++
++         if (cfgExists) {
++            nasBase->Remove(label);
++         }
++
++         config->Write();
++         config->Unlock();
++      }
++      catch (HostCtlException& e) {
++         config->Unlock();
++         throw;
++      }
++   }
++
++   bool
++   CloudFileSystemImpl::IsMounted() throw (HostCtlException)
++   {
++      return IsMounted(_volumeName);
++   }
++
++   bool
++   CloudFileSystemImpl::IsActiveVolume() throw (HostCtlException)
++   {
++      //special casing this doesn't makes sense for NFS
++      return IsMounted();
++   }
++
++   vector<MacAddress>
++   CloudFileSystemImpl::GetActiveVolumeUsers() throw (HostCtlException)
++   {
++      vector<MacAddress> addresses;
++      return addresses;
++   }
++
++   HostCtl::Storage::VAAIState
++   CloudFileSystemImpl::GetVAAIState () throw (HostCtl::Lib::HostCtlException)
++   {
++      return VAAI_STATE_UNSUPPORTED;
++   }
++
++   bool
++   CloudFileSystemImpl::VsiExists(string volumeLabel)
++      throw (HostCtl::Lib::HostCtlException)
++   {
++	   return true;
++#if 0
++      Sysinfo mnt(VSI_MODULE_NODE_mnt);
++      mnt.SetModule("cloudfs");
++      return mnt.IsValidInstance(volumeLabel);
++#endif
++   }
++
++   bool
++   CloudFileSystemImpl::IsMounted(string volumeLabel)
++      throw (HostCtl::Lib::HostCtlException)
++   {
++	   return true;
++#if 0
++      if (VsiExists(volumeLabel)) {
++         NFSVsi_MountPropertyStruct props;
++         QueryVsi(props, volumeLabel);
++         return props.isMounted;
++      }
++
++      return false;
++#endif
++   }
++
++   bool
++   CloudFileSystemImpl::IsAccessible() throw (HostCtl::Lib::HostCtlException)
++   {
++	   return true;
++#if 0
++      if (VsiExists(_volumeName)) {
++         NFSVsi_MountPropertyStruct props;
++         QueryVsi(props, _volumeName);
++         return props.isAccessible;
++      }
++      return false;
++#endif
++   }
++
++   void
++   CloudFileSystemImpl::Refresh() throw (HostCtl::Lib::HostCtlException)
++   {
++      ConfigFilePtr config = GetConfigFile();
++      config->Lock();
++
++      try {
++         if (_volumeName == "") {
++            VMKCTL_THROW(VmkCtlException, "Unable to refresh object, volume Name not valid")
++         }
++
++         if (IsAccessible()) {
++            string vmfsPath = VMFS_VOLUME_PATH + _volumeName;
++
++            char linkBuf[1024];
++            memset(linkBuf, 0, sizeof(linkBuf));
++            if (readlink(vmfsPath.c_str(), linkBuf, sizeof(linkBuf)) < 0) {
++               VMKCTL_THROW(VmkCtlException, "Unable to get Console path for Mount")
++            }
++
++            _consolePath = VMFS_VOLUME_PATH + linkBuf;
++            VmFileSystemImpl::Refresh();
++         }
++
++         ConfigBranchPtr curr = GetConfigLocation(config);
++
++         if (VsiExists(_volumeName)) {
++
++            NFSVsi_MountPropertyStruct props;
++
++            //QueryVsi(props, _volumeName);
++
++            _remoteAddr = (const char*)props.serverIP;
++            _shareName = (const char*)props.serverVolume;
++
++
++            if (!curr->GetValue("host", &_remoteHost) && _remoteHost == "") {
++               _remoteHost = _remoteAddr;
++            }
++
++            _readOnly = props.readOnly;
++         }
++         else {
++            if (!curr->GetValue("share", &_shareName)) {
++               VMKCTL_THROW(VmkCtlException, "Unable to get share name for volume, " 
++                  + _volumeName + ". Does it exist?")
++            }
++
++            if (!curr->GetValue("host", &_remoteHost)) {
++               VMKCTL_THROW(VmkCtlException, "Unable to get remote host for volume, " 
++                  + _volumeName + ". Does it exist?")
++            }
++         }
++
++         config->Unlock();
++      }
++      catch (HostCtlException& e) {
++         config->Unlock();
++         throw;
++      }
++
++      REFRESHED();
++   }
++
++   bool
++   CloudFileSystemImpl::GetConfigReadOnly() throw (HostCtlException)
++   {
++      ConfigFilePtr config = GetConfigFile();
++      config->Lock();
++
++      bool readOnly;
++      try {
++         ConfigBranchPtr curr = GetConfigLocation(config);
++         if (!curr->GetValue("readOnly", &readOnly)) {
++            readOnly = false;
++         }
++         config->Unlock();
++      }
++      catch (HostCtlException& e) {
++         config->Unlock();
++         throw;
++      }
++
++      return readOnly;
++   }
++
++   void
++   CloudFileSystemImpl::SetConfigReadOnly(bool readOnly)
++      throw (HostCtlException)
++   {
++      if (! LabelExists(_volumeName)) {
++         stringstream error;
++         error << "Unable to set 'ReadOnly' option, "
++               << "filesystem with the name " << _volumeName
++               << " does not exist";
++         VMKCTL_THROW(VmkCtlException, error.str());
++      }
++
++      ConfigFilePtr config = GetConfigFile();
++      config->Lock();
++
++      try {
++         ConfigBranchPtr curr = GetConfigLocation(config);
++         curr->SetValue("readOnly", readOnly);
++         config->Write();
++         config->Unlock();
++      }
++      catch (HostCtlException& e) {
++         config->Unlock();
++         throw;
++      }
++   }
++
++   void
++   CloudFileSystemImpl::SetVolumeName(string newName)
++      throw (HostCtl::Lib::HostCtlException)
++   {
++   }
++
++   bool
++   CloudFileSystemImpl::GetUnstableWrites() throw (HostCtlException)
++   {
++	   return false;
++   }
++
++   void
++   CloudFileSystemImpl::SetUnstableWrites(bool unstable)
++      throw (HostCtlException)
++   {
++   }
++
++   string
++   CloudFileSystemImpl::GetName() const
++   {
++      return _consolePath;
++   }
++
++   void
++   CloudFileSystemImpl::LoadConfig() throw (HostCtlException)
++   {
++      ConfigFilePtr config = GetConfigFile();
++      config->Lock();
++
++      try {
++         ConfigBranchPtr curr = GetConfigLocation(config);
++
++         bool enabled;
++         if (!(curr->GetValue("host", &_remoteHost) &&
++               curr->GetValue("share", &_shareName) &&
++               curr->GetValue("enabled", &enabled))) {
++            VMKCTL_THROW(VmkCtlException, "Unable to get mount information from config")
++         }
++
++         if (enabled) {
++            bool unstable = false;
++            curr->GetValue("unstableWrites", &unstable);
++         }
++         curr->SetValue("enabled", true);
++         config->Unlock();
++      }
++      catch (HostCtlException& e) {
++         config->Unlock();
++         throw;
++      }
++   }
++
++   void
++   CloudFileSystemImpl::Print(ObjectPrinter* printer)
++      throw (HostCtl::Lib::HostCtlException)
++   {
++      CHECK_REFRESH()
++
++      printer->SetType("Cloud FileSystem");
++      printer->PrintHeader();
++      if (IsAccessible()) {
++         ObjectPrinter* child = printer->GetChild();
++         VmFileSystemImpl::Print(child);
++      }
++      else {
++         printer->Print("DISK OFFLINE", "NO STATS");
++      }
++      printer->Print("Host", _remoteHost);
++      printer->Print("Share", _shareName);
++      printer->Print("IP Addr", _remoteAddr);
++      printer->Print("Mounted", IsMounted());
++      printer->Print("ReadOnly", _readOnly);
++      printer->Print("Accessible", IsAccessible());
++      printer->Print("ConfigReadOnly", GetConfigReadOnly());
++      printer->PrintFooter();
++   }
++
++   ConfigBranchPtr
++   CloudFileSystemImpl::GetConfigLocation(ConfigFilePtr config)
++   {
++      ConfigBranchPtr nasBase = config->GetBranch(NAS_CFG_KEY);
++      ConfigBranchPtr labelBase = nasBase->GetBranch(_volumeName);
++
++      return labelBase;
++   }
++
++   void
++   CloudFileSystemImpl::GetStats(string volumeName, NASStats& stats)
++      throw (HostCtl::Lib::HostCtlException)
++   {
++#if 0
++      NFSVsi_MountPropertyStruct props;
++      QueryVsi(props, volumeName);
++      stats.SetValues(props.reads, props.readBytes, props.readTime,
++                      props.writes, props.writeBytes, props.writeTime,
++                      props.aborts, props.active);
++#endif
++   }
++
++   void
++   CloudFileSystemImpl::GetStats(NASStats& stats)
++      throw (HostCtl::Lib::HostCtlException)
++   {
++      return GetStats(_volumeName, stats);
++   }
++
++   /*
++    * GetWorldStats() is just a place holder for now. Per-world stats
++    * will be done in future along with disk share work.
++    */
++   void
++   CloudFileSystemImpl::GetWorldStats(uint32 worldID, NASStats& stats)
++      throw (HostCtl::Lib::HostCtlException)
++   {
++#if 0
++      NFSVsi_MountPropertyStruct props;
++      QueryVsi(props, _volumeName);
++      stats.SetValues(props.reads, props.readBytes, props.readTime,
++                      props.writes, props.writeBytes, props.writeTime,
++                      props.aborts, props.active);
++#endif
++  }
++
++  uint32   
++  CloudFileSystemImpl::GetMaxQueueDepth() throw (HostCtlException)
++  {
++	  return 256;
++#if 0
++     if (IsMounted()) {
++        NFSVsi_MountPropertyStruct props;
++        QueryVsi(props, _volumeName);
++        return props.maxQDepth;
++     }
++     else {
++        VMKCTL_THROW(VmkCtlException,
++           "Unable to get Max queue depth on Unmounted volume")
++     }
++#endif
++  }
++
++   void
++   CloudFileSystemImpl::SetMaxQueueDepth(uint32 qDepth)
++      throw (HostCtlException)
++   {
++   }
++
++   uint32   
++   CloudFileSystemImpl::GetLatencyThreshold() throw (HostCtlException)
++   {
++	   return 1000;
++#if 0
++      if (IsMounted()) {
++         NFSVsi_MountPropertyStruct props;
++         QueryVsi(props, _volumeName);
++         return props.latencyThreshold;
++      }
++      else {
++         VMKCTL_THROW(VmkCtlException,
++            "Unable to get latency threshold on Unmounted volume")
++      }
++#endif
++   }
++
++   void
++   CloudFileSystemImpl::SetLatencyThreshold(uint32 value)
++      throw (HostCtlException)
++   {
++   }
++
++}
++}
++
++
+diff --git a/lib/vmkctl/storage/StorageInfoImpl.cpp b/lib/vmkctl/storage/StorageInfoImpl.cpp
+index 42dbf1f..c4d15f6 100644
+--- a/lib/vmkctl/storage/StorageInfoImpl.cpp
++++ b/lib/vmkctl/storage/StorageInfoImpl.cpp
+@@ -47,6 +47,7 @@ extern "C" {
+ #include "storage/SataInterfaceImpl.h"
+ #include "storage/UsbInterfaceImpl.h"
+ #include "storage/NetworkFileSystemImpl.h"
++#include "storage/CloudFileSystemImpl.h"
+ #include "storage/DiagnosticPartitionImpl.h"
+ #include "storage/LunImpl.h"
+ #include "storage/DiskLunImpl.h"
+@@ -2249,6 +2250,7 @@ namespace Storage {
+       CastVector(GetNetworkFileSystems(), &fileSystems);
+       CastVector(GetVmfsFileSystems(), &fileSystems);
+       CastVector(GetVFATFileSystems(), &fileSystems);
++      // XXX CloudFS fileSystems.push_back(new CloudFileSystemImpl(VMFS_VOLUME_PATH + "/" + uuid));
+       return fileSystems;
+    }
+ 
+diff --git a/lib/vmkctl/storage/Subdir.sc b/lib/vmkctl/storage/Subdir.sc
+index 67637aa..93133af 100644
+--- a/lib/vmkctl/storage/Subdir.sc
++++ b/lib/vmkctl/storage/Subdir.sc
+@@ -6,6 +6,7 @@ files += Split(''' BlockScsiInterfaceImpl.cpp
+                    IdeScsiInterfaceImpl.cpp 
+                    LunImpl.cpp 
+                    NetworkFileSystemImpl.cpp 
++                   CloudFileSystemImpl.cpp 
+                    ParallelScsiInterfaceImpl.cpp 
+                    UsbInterfaceImpl.cpp 
+                    SataInterfaceImpl.cpp 

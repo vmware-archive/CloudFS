@@ -1,0 +1,115 @@
+diff --git a/scons/apps/esx/cloudfstools.sc b/scons/apps/esx/cloudfstools.sc
+new file mode 100644
+index 0000000..9446bc6
+--- /dev/null
++++ b/scons/apps/esx/cloudfstools.sc
+@@ -0,0 +1,46 @@
++import vmware
++import os
++
++env = vmware.DefaultEnvironment()
++
++vmware.LoadTool(env, ['libcurl','libz','vmkuserlib'])
++
++
++
++toolchain = '/build/toolchain'
++bits = '32' if vmware.Host().Is32Bit() else '64'
++opensslDir = 'openssl-0.9.8g'
++cryptoPath = os.path.join(toolchain, 'lin' + bits, opensslDir, 'lib')
++
++
++env.Append(CPPPATH = ['#bora/modules/vmkernel/cloudfs',
++                      '#bora/modules/vmkernel/cloudfs/httplib',
++                      '#bora/lib/cloudfs',
++                      '#bora/public',
++                     ], 
++           CPPDEFINES = {'USERLEVEL': None},
++           LIBS = ['dl','z','pthread','curl'],
++           LINKFLAGS = ['-Wl,-rpath ' + cryptoPath],
++          )
++
++r = vmware.Executable('replicator', env = env, allowInsecureSymbols = True)
++r.addLibs('vmlibs', ['cloudfs','string', 'misc'])
++r.AddDynamicSubdir('#bora/apps/cloudfs', files=[ 'replicator.c' ]  , env = env)
++rnode = r.createProgramNode(env, basename = 'replicator')
++
++vmware.RegisterNode(rnode, 'replicator')
++vmware.Alias('replicator-build', rnode)
++vmware.RegisterNode(rnode, 'esx-apps')
++
++
++
++c = vmware.Executable('cloudfstool', env = env, allowInsecureSymbols = True)
++c.addLibs('vmlibs', ['cloudfs','string', 'misc'])
++c.AddDynamicSubdir('#bora/apps/cloudfs', files=[ 'cloudfs.c' ]  , env = env)
++cnode = c.createProgramNode(env, basename = 'cloudfstool')
++
++vmware.RegisterNode(cnode, 'cloudfstool')
++vmware.Alias('cloudfs-build', cnode)
++vmware.RegisterNode(cnode, 'esx-apps')
++
++
+diff --git a/scons/modules/hostd.sc b/scons/modules/hostd.sc
+index 72ccff6..1b59208 100644
+--- a/scons/modules/hostd.sc
++++ b/scons/modules/hostd.sc
+@@ -83,6 +83,7 @@ commonBoraLibs = Split('''
+    uuid
+    workerLib
+    url
++   cloudfs
+ ''')
+ 
+ if commonEnv.Host().IsWindows():
+diff --git a/scons/modules/vmkModules.sc b/scons/modules/vmkModules.sc
+index bf840f8..a217119 100644
+--- a/scons/modules/vmkModules.sc
++++ b/scons/modules/vmkModules.sc
+@@ -319,6 +319,7 @@ defineModule('applesmc', envAllVmkapi)
+ defineModule('overlay_test', envVDS)
+ defineModule('fence_overlay', envVDS)
+ defineModule('svmmirror', envAllVmkapi)
++defineModule('cloudfs', envAllVmkapi)
+ 
+ defineModule('dma_mapper_null', envAllVmkapi, baseDir = 'dma/mappers/null')
+ 
+diff --git a/scons/modules/vmkctllib.sc b/scons/modules/vmkctllib.sc
+index 530b05e..9d9f329 100644
+--- a/scons/modules/vmkctllib.sc
++++ b/scons/modules/vmkctllib.sc
+@@ -20,6 +20,7 @@ env.Append (CPPPATH = Split('''#bora/lib/vmkctl/include
+                        [ vmware.HeaderDirectory('lib-vmksysinfo-headers'),
+                          '#bora/modules/vmkernel/migrate',
+                          '#bora/modules/vmkernel/nfsclient',
++                         '#bora/modules/vmkernel/cloudfs',
+                          '#bora/modules/vmkernel/cbrc_filter',
+                          '#bora/modules/vmkernel/lvmdriver',
+                          '#bora/modules/vmkernel/heartbeat',
+@@ -33,6 +34,7 @@ env.Append (CPPPATH = Split('''#bora/lib/vmkctl/include
+                          '#bora/modules/vmkernel/iso9660',
+                          vmware.HeaderDirectory('vsi-vmkmod-migrate', host = 'vmkernel64'),
+                          vmware.HeaderDirectory('vsi-vmkmod-nfsclient', host = 'vmkernel64'),
++                         vmware.HeaderDirectory('vsi-vmkmod-cloudfs', host = 'vmkernel64'),
+                          vmware.HeaderDirectory('vsi-vmkmod-cbrc_filter', host = 'vmkernel64'),
+                          vmware.HeaderDirectory('vsi-vmkmod-vmkibft', host = 'vmkernel64'),
+                          vmware.HeaderDirectory('vsi-vmkmod-vfat', host = 'vmkernel64'),
+diff --git a/scons/products/esx.sc b/scons/products/esx.sc
+index c50713e..cb647b0 100644
+--- a/scons/products/esx.sc
++++ b/scons/products/esx.sc
+@@ -163,9 +163,14 @@ class Esx(ProductDefinition):
+             'modules/vpxa.sc',],
+           not skip_hostd_vpxa),
+ 
++
+          ('uw32',
+           ['apps/esx/cifsauthd.sc'],
+           not skip_cifs),
++
++         # cloudfs
++         ('uw32',
++          ['apps/esx/cloudfstools.sc']),
+    ]
+ 
+ 

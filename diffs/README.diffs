@@ -1,0 +1,5 @@
+Files in this directory are relevant for those with VMware source code access,
+as they show what must be changed to hook in to the VMware build system, and
+how to make CloudFS appear as a datastore in the VMware management stack
+("vim").
+
