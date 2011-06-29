@@ -1,0 +1,13 @@
+if ( ! $(httplib) ) { httplib = 1 ;
+
+LOCATION = bora modules vmkernel cloudfs ;
+
+SubDir TOP $(LOCATION) httplib ;
+SubDirHdrs $(TOP) $(LOCATION) ;
+
+
+VMKLibrary libvmkhttp : parseHttp.c ;
+UWLibrary httplib : parseHttp.c ;
+
+
+}

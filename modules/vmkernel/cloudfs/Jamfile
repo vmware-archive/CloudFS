@@ -1,0 +1,46 @@
+SubDir TOP bora modules vmkernel cloudfs ;
+
+SubDirHdrs $(TOP) bora lib cloudfs ;
+SubDirHdrs $(TOP) bora modules vmkernel cloudfs httplib ;
+
+VMKModule cloudfs :
+	bTreeRange.c
+	binHeap.c
+	btree.c
+	log.c
+   logCompactor.c
+	logModule.c
+	logfs.c
+	logfsHttpd.c
+	logfsHttpClient.c
+	logfsIO.c
+	logfsNet.c
+	pagedTree.c
+	logfsPosix.c
+	logfsCheckPoint.c
+	metaLog.c
+	obsoleted.c
+	rangemap.c
+	remoteLog.c
+	vDisk.c
+	vDiskMap.c
+	logfsVsi.c
+   common.c
+   vebTree.c
+   fingerPrint.c
+   hashDb.c
+   graph.c
+   compressor.c
+	;
+
+PreprocessVSI logfs_vsi.h ;
+
+LinkLibraries cloudfs : libvmksha libvsi libvmkhttp ;
+
+# UWMain showlog : showlog.c ;
+
+SubInclude TOP bora modules vmkernel cloudfs shalib ;
+SubInclude TOP bora modules vmkernel cloudfs httplib ;
+SubInclude TOP bora lib cloudfs ;
+SubInclude TOP bora apps cloudfs ;
+

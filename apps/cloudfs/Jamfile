@@ -1,0 +1,32 @@
+if ( ! $(cloudfstools) ) { cloudfstools = 1 ;
+SubDir TOP bora apps cloudfs ;
+
+SubDirHdrs $(TOP) bora modules vmkernel cloudfs ;
+SubDirHdrs $(TOP) bora modules vmkernel cloudfs httplib ;
+SubDirHdrs $(TOP) bora lib cloudfs ;
+SubDirHdrs $(TOP) bora public ;
+SubDirHdrs $(TOP) bora lib public ;
+
+UWMain cloudfstool : cloudfs.c ;
+LinkLibraries cloudfstool : cloudfslib libsha httplib ;
+
+UWMain replicator : replicator.c ;
+LinkLibraries replicator : cloudfslib libsha httplib ;
+
+LINKLIBS on replicator cloudfstool += -lpthread -ldl -lcurl -lz -lcrypto -lssl -lvmkuser
+   $(TOP)/bora/build/scons/build/vmlibs/$(BUILDTYPE)/uw32/SUBDIRS/bora/lib/string/lib-string.a
+   $(TOP)/bora/build/scons/build/vmlibs/obj/uw32/SUBDIRS/bora/lib/misc/lib-misc.a  ;
+
+LINKFLAGS on replicator cloudfstool += 
+   -L/build/toolchain/lin32/curl-7.19.5-3/lib
+   -L/build/toolchain/lin32/zlib-1.2.3-3/lib/
+   -L/build/toolchain/lin32/openssl-0.9.8m/lib/
+   -L$(TOP)/bora/build/scons/build/LIBRARIES/vmkuserlib/uw32/obj 
+   ;
+
+SubInclude TOP bora lib cloudfs ;
+SubInclude TOP bora apps cloudfs ;
+SubInclude TOP bora modules vmkernel cloudfs shalib ;
+SubInclude TOP bora modules vmkernel cloudfs httplib ;
+
+}

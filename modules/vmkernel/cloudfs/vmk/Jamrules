@@ -1,0 +1,343 @@
+VMKCC = /build/toolchain/lin32/gcc-4.1.2-9/bin/x86_64-linux-gcc ;
+
+CC = /build/toolchain/lin32/gcc-4.1.2-8/bin/i686-linux5.0-gcc  ;
+LINK = $(CC) ;
+
+UWCCFLAGS =
+   -fno-strict-aliasing -fwrapv -fno-working-directory -fno-strict-aliasing
+   -funwind-tables -fasynchronous-unwind-tables -Wall -Wno-unused-value -Werror
+   -O1 -march=i686 -g -fPIC -Wdeclaration-after-statement
+   -Wno-unused-value -Wno-pointer-sign -Wno-strict-prototypes -DBUILT_BY_jgorm
+   -DDEBUG_STUB -DDEBUG_STUB_ACCESS_IO_PORTS -DUSERLEVEL
+   -DVMK_ENABLE_ALL_VMKAPIS -DVMX86_DEBUG -DVMX86_DEVEL -DVMX86_LOG
+   -DVMX86_STATS -DVMX86_VPROBES -D_BSD_SOURCE -D_FILE_OFFSET_BITS=64
+   -D_FORTIFY_SOURCE=1 -D_LARGEFILE64_SOURCE -D_SVID_SOURCE -D_XOPEN_SOURCE=500
+   ;
+
+
+UWHDRS =
+	#$(TOP)/bora/modules/vmkernel/cloudfs/libcurl/include
+	$(TOP)/bora/vmkernel/include/public
+	$(TOP)/bora/vmkernel/include/user
+	$(TOP)/bora/vmkernel/include/vmkapi/current
+	$(TOP)/bora/vmkernel/public
+	$(TOP)/bora/vmkernel/distribute
+	$(TOP)/bora/vmcore/public
+	$(TOP)/bora/lib/public
+	$(TOP)/bora/public
+	$(TOP)/bora/build/scons/build/HEADERS/lib-vmksysinfo-headers/uw32/obj
+	$(TOP)/bora/build/build/HEADERS/vmkapi-current/uw32/$(BUILDTYPE)/
+	$(TOP)/bora/public
+	$(TOP)/bora/lib/public
+	/build/toolchain/lin32/zlib-1.2.3-3/include
+	/build/toolchain/lin32/openssl-0.9.8g/include
+   /build/toolchain/lin32/curl-7.19.5-3/include/ 
+	$(TOP)/bora/modules/vmkernel/cloudfs
+	$(TOP)/bora/vmkernel/include/vmkapi/v2_0_0_0/
+	;
+
+
+VMKHDRS = 
+	$(TOP)/bora/modules/vmkernel/cloudfs $(TOP)/bora/build/scons/build/version
+	$(TOP)/bora/public $(TOP)/bora/vmkernel/distribute $(TOP)/bora/vmkernel/public
+	$(TOP)/bora/vmkernel/private $(TOP)/bora/vmkernel/driver
+	$(TOP)/bora/vmkernel/include/public $(TOP)/bora/vmkernel/include/vmnix
+	$(TOP)/bora/vmkernel/include/user $(TOP)/bora/vmkernel/include/vmcore
+	$(TOP)/bora/vmx/public $(TOP)/bora/lib/shared $(TOP)/bora/lib/public
+	$(TOP)/bora/modules/vmcrosstalk/common $(TOP)/bora/vmcore/public
+	$(TOP)/bora/build/build/HEADERS/lib-vmksysinfo-headers/vmkernel64/obj
+	$(TOP)/bora/build/build/HEADERS/vmkapi-current/vmkernel64/obj
+	$(TOP)/bora/vmkernel/include/vmkapi/v2_0_0_0/
+	$(TOP)/bora/vmkernel/sched $(TOP)/bora/vmkernel/filesystems
+	$(TOP)/bora/modules/vmkernel/tcpip3/include
+	$(TOP)/bora/modules/vmkernel/tcpip3/freebsd/sys
+	$(TOP)/bora/build/build/HEADERS/vsi-vmkmod-logfs/vmkernel64/obj
+	$(TOP)/bora/modules/vmkernel/tcpip3/include
+	$(TOP)/bora/modules/vmkernel/tcpip3/freebsd
+	$(TOP)/bora/modules/vmkernel/tcpip3/freebsd/amd64
+
+	;
+
+
+if $(RELEASE) {
+VMKCCFLAGS = 
+	-fno-working-directory -gdwarf-2 -g3 -O2 -fno-strict-aliasing -fPIE -include
+	$(TOP)/bora/vmkernel/distribute/push-hidden.h -Wall -Werror
+	-Wstrict-prototypes -pipe -fno-strict-aliasing -freg-struct-return
+	-falign-jumps=1 -falign-functions=4 -falign-loops=1 -m64 -mcmodel=small
+	-mno-red-zone -finline-limit=2000 -fno-common -fno-omit-frame-pointer
+	-mpreferred-stack-boundary=4 -fno-reorder-blocks -minline-all-stringops
+	-ffreestanding -nostdinc -isystem
+	/build/toolchain/lin32/gcc-4.1.2-9/lib/gcc/x86_64-linux/4.1.2/include
+	-fno-strict-aliasing -Wdeclaration-after-statement -Wno-unused-value
+	-Wno-pointer-sign -Wno-strict-prototypes -Wno-declaration-after-statement
+	-Wno-unused-value -Wno-pointer-sign -Wno-strict-prototypes ;
+
+
+	
+	
+VMKDEFINES =
+	-DBUILT_BY_jgorm
+	-DCPU=586 -DDEBUG_STUB -DDEBUG_STUB_ACCESS_IO_PORTS -DESX2_NET_SUPPORT
+	-DESX3_NETWORKING_NOT_DONE_YET -DVMKERNEL -DVMKERNEL_MODULE
+	-DVMK_DEVKIT_HAS_API_VMKAPI_BASE -DVMK_DEVKIT_HAS_API_VMKAPI_DEVICE
+	-DVMK_DEVKIT_HAS_API_VMKAPI_DVFILTER -DVMK_DEVKIT_HAS_API_VMKAPI_EXECMEM
+	-DVMK_DEVKIT_HAS_API_VMKAPI_EXPERIMENTAL -DVMK_DEVKIT_HAS_API_VMKAPI_ISCSI
+	-DVMK_DEVKIT_HAS_API_VMKAPI_MPP -DVMK_DEVKIT_HAS_API_VMKAPI_NET
+	-DVMK_DEVKIT_HAS_API_VMKAPI_NMP -DVMK_DEVKIT_HAS_API_VMKAPI_NPIV
+	-DVMK_DEVKIT_HAS_API_VMKAPI_SCSI -DVMK_DEVKIT_HAS_API_VMKAPI_SOCKETS
+	-DVMK_DEVKIT_HAS_API_VMKAPI_VDS -DVMK_DEVKIT_IS_DDK
+	-DVMK_DEVKIT_USES_BINARY_COMPATIBLE_APIS
+	-DVMK_DEVKIT_USES_BINARY_INCOMPATIBLE_APIS -DVMK_DEVKIT_USES_PRIVATE_APIS
+	-DVMK_DEVKIT_USES_PUBLIC_APIS -DVMX86_DEVEL -DVMX86_SERVER -DVMX86_STATS
+	-DVMX86_VPROBES -D__KERNEL__ -Dmemcmp=__builtin_memcmp
+	;	
+
+} else {
+
+VMKCCFLAGS = 
+   -fwrapv -fno-working-directory -g -ggdb3 -O1 -fno-strict-aliasing -fPIE
+   -include $(TOP)/bora/vmkernel/distribute/push-hidden.h -Wall -Werror
+   -Wstrict-prototypes -pipe -fno-strict-aliasing -freg-struct-return
+   -falign-jumps=1 -falign-functions=4 -falign-loops=1 -m64 -mcmodel=small
+   -mno-red-zone -finline-limit=2000 -fno-common -fno-omit-frame-pointer
+   -mpreferred-stack-boundary=4 -fno-reorder-blocks -minline-all-stringops
+   -ffreestanding -nostdinc -isystem
+   /build/toolchain/lin32/gcc-4.1.2-9/lib/gcc/x86_64-linux/4.1.2/include
+   -fno-strict-aliasing -Wdeclaration-after-statement -Wno-unused-value
+   -Wno-pointer-sign -Wno-strict-prototypes -Wno-declaration-after-statement
+   -Wno-unused-value -Wno-pointer-sign -Wno-strict-prototypes 
+   ;
+
+
+
+
+VMKDEFINES =
+   -DBUILT_BY_jgorm -DCPU=586 -DDEBUG_STUB -DDEBUG_STUB_ACCESS_IO_PORTS
+   -DVMKERNEL -DVMKERNEL_MODULE -DVMK_DEVKIT_HAS_API_VMKAPI_BASE
+   -DVMK_DEVKIT_HAS_API_VMKAPI_DEVICE -DVMK_DEVKIT_HAS_API_VMKAPI_DVFILTER
+   -DVMK_DEVKIT_HAS_API_VMKAPI_EXECMEM -DVMK_DEVKIT_HAS_API_VMKAPI_EXPERIMENTAL
+   -DVMK_DEVKIT_HAS_API_VMKAPI_ISCSI -DVMK_DEVKIT_HAS_API_VMKAPI_MPP
+   -DVMK_DEVKIT_HAS_API_VMKAPI_NET -DVMK_DEVKIT_HAS_API_VMKAPI_NMP
+   -DVMK_DEVKIT_HAS_API_VMKAPI_NPIV -DVMK_DEVKIT_HAS_API_VMKAPI_SCSI
+   -DVMK_DEVKIT_HAS_API_VMKAPI_SOCKETS
+   -DVMK_DEVKIT_HAS_API_VMKAPI_SYSTEM_HEALTH -DVMK_DEVKIT_HAS_API_VMKAPI_VDS
+   -DVMK_DEVKIT_IS_DDK -DVMK_DEVKIT_USES_BINARY_COMPATIBLE_APIS
+   -DVMK_DEVKIT_USES_BINARY_INCOMPATIBLE_APIS -DVMK_DEVKIT_USES_PRIVATE_APIS
+   -DVMK_DEVKIT_USES_PUBLIC_APIS -DVMX86_DEBUG -DVMX86_DEVEL -DVMX86_LOG
+   -DVMX86_SERVER -DVMX86_STATS -DVMX86_VPROBES
+   -D_MODULE_LICENSE_=VMK_MODULE_LICENSE_VMWARE -D__KERNEL__
+   -Dmemcmp=__builtin_memcmp ;
+
+}
+
+if $(RELEASE) {
+	BUILDTYPE = opt ;
+} else {
+	BUILDTYPE = obj ;
+}
+
+BUILD = jambuild/$(BUILDTYPE) ;
+
+actions Strip
+{
+/build/toolchain/lin32/binutils-2.16.1-vt/bin/x86_64-linux-strip --strip-debug $(1)
+}
+
+actions Sign
+{
+/build/toolchain/lin32/elfsign-0.2.2-2/bin/elfsign -f $(1)  -c $(TOP)/bora/lib/vmksignverify/data/vmware.cert -p $(TOP)/bora/lib/vmksignverify/data/vmware.key
+}
+
+
+rule ObjectToolsAndFlags
+{
+	local _g = [ FGristFiles $(<:S=.ko) ] ;
+	CC on $(_g) = $(VMKCC) ;
+	CCHDRS on $(_g)   += [ on $(<) FIncludes $(VMKHDRS) $(LOCATE) ] ; 
+	CCFLAGS on $(_g)   = $(VMKCCFLAGS) ;
+	CCDEFS on $(_g)   = $(VMKDEFINES) ;
+}
+
+rule VMKModule {
+	local _sources = $(TOP)/bora/modules/vmkernel/vmkapi_shim/current/vmkapi_current.c $(>) ;
+	local o = $(_sources:S=.ko) ;
+	MainFromObjects $(<) : $(o) ;
+	VMKObjects $(_sources) ;
+
+	ObjectToolsAndFlags $(o)  ;
+	LINK on $(<) = /build/toolchain/lin32/binutils-2.17.50.0.15-modcall/bin/x86_64-linux-ld ;
+	LINKFLAGS on $(<) = -r  --whole-archive  ;
+
+	Strip $(1) ;
+	Sign $(1) ;
+}
+
+rule VMKObjects
+{
+	local _i ;
+
+	for _i in [ FGristFiles $(<) ]
+	{
+		Object $(_i:S=.ko) : $(_i) ;
+		Depends obj : $(_i:S=.ko) ;
+	}
+}
+
+
+rule VMKLibrary
+{
+	local o = $(>:S=.ko) ;
+	LibraryFromObjects $(<) : $(o) ;
+	VMKObjects $(>) ;
+	ObjectToolsAndFlags $(o) ;
+}
+
+rule UWLibrary {
+	ObjectHdrs $(>) : $(UWHDRS) ;
+	ObjectCcFlags  $(>)  : $(UWCCFLAGS) -DUSERLEVEL ;
+	Library $(<) : $(>) ;
+}
+
+
+rule UWMain {
+	local o = $(>:S=$(SUFOBJ)) ;
+	MainFromObjects $(<) : $(o) ;
+	Objects $(>) ;
+
+	ObjectHdrs $(>) : $(UWHDRS) ;
+	ObjectCcFlags  $(>)  : $(UWCCFLAGS) -DUSERLEVEL ;
+
+	Strip $(1) ;
+}
+
+rule MyJoin
+{
+	return $(<:J=$(SLASH)) ;
+}
+
+rule MakeLocate
+{
+	local A ;
+	if $(>)
+	{
+		switch $(<:S)
+		{
+			case .ko : A = [ MyJoin $(TOP) $(BUILD) tmp $(SOURCE_GRIST) ] ;
+			case .o : A = [ MyJoin $(TOP) $(BUILD) tmp $(SOURCE_GRIST) ] ;
+			case .a : A = [ MyJoin $(TOP) $(BUILD) lib ] ;
+			case *  : A = [ MyJoin $(TOP) $(BUILD) ] ;
+		}
+	}
+	else
+	{
+		A = [ MyJoin $(TOP) $(BUILD) ] ;
+	}
+	#echo $(<) goes in $(A) ;
+
+	LOCATE on $(<) = $(A) ;
+	Depends $(<) : $(A[1]:G=dir) ;
+	MkDir $(A[1]:G=dir) ;
+
+}
+
+actions PreprocessVSI0
+{
+	$(VMKCC) -E -fno-working-directory $(VMKDEFINES)  -DVSIDEF_PARSER $(CCHDRS) $(>)  > $(<)
+}
+
+rule GenSysInfoDefs
+{
+	Depends $(<) : $(>) ;
+	Clean clean : $(<) ;
+}
+
+actions GenSysInfoDefs
+{
+	(cd $(TOP) ; bora/build/scons/build/vsiParser/$(BUILDTYPE)/vmkernel64/vsiParser --defines --boiler-plate --module logfs --filename $(BUILD)/gen_vsiTree_int.h )  > $(<)
+}
+
+rule GenSysInfo
+{
+	Depends $(<) : $(>) ;
+	Clean clean : $(<) ;
+}
+actions GenSysInfo 
+{
+	$(TOP)/bora/build/scons/build/vsiParser/$(BUILDTYPE)/vmkernel64/vsiParser --prologue --lookup --typedefs --funcs --module logfs --filename $(>)  >  $(<)
+}
+
+rule GenPreReq
+{
+	local _t ;
+	local _i ;
+
+	_t = [ FGristSourceFiles $(<) ] ;
+
+	Depends $(_t) : $(>) ;
+	Clean clean : $(_t) ;
+
+	MakeLocate $(_t) : $(LOCATE_SOURCE) ;
+	SEARCH on $(>) = $(SEARCH_SOURCE) ;
+
+	GenPreReq1 $(_t[1]) : $(>) ;
+	GenPreReq2 $(_t[2]) : $(>) ;
+}
+
+actions GenPreReq1
+{
+	$(TOP)/bora/support/scripts/vsiGenPrereqFiles.pl > $(<) ;
+}
+actions GenPreReq2
+{
+	$(TOP)/bora/support/scripts/vsiGenPrereqFiles.pl $(>)  > $(<) ;
+}
+
+
+
+rule PreprocessVSI
+{
+	local gen  = gen_vsiTree_int.h ;
+	local vsih = vsiTree_int.h ;
+	local vsic = vsiTree_int.c ;
+	local sysinfo = gen_logfssysinfo.c ;
+	local sysinfodefs = gen_logfssysinfodefs.h ;
+
+	MakeLocate $(gen) ;
+	MakeLocate $(vsih) ;
+	MakeLocate $(vsic) ;
+	MakeLocate $(sysinfo) ;
+	MakeLocate $(sysinfodefs) ;
+
+	CCHDRS on $(gen)   += [ on $(gen) FIncludes $(VMKHDRS) ] ; 
+
+	GenPreReq $(vsic) $(vsih) : $(<) ;
+
+	PreprocessVSI0 $(gen) : $(vsih) ;
+	Depends $(gen) : $(vsih) ;
+	Clean clean : $(vsih) ;
+
+
+	GenSysInfoDefs $(sysinfodefs) : $(vsih) ;
+
+	Depends $(sysinfodefs) : $(vsih) ;
+	Depends $(vsic) : $(vsih) ;
+	Depends $(sysinfo) : $(vsih) ;
+
+	GenSysInfo $(sysinfo) : $(gen) ;
+
+	local sysobject = [ FGristFiles $(<:S=.ko) ] ;
+	local vsiobject = [ FGristFiles $(vsic:S=.ko) ] ;
+	MakeLocate $(sysobject) ;
+
+	Object $(sysobject) : $(sysinfo) ;
+	ObjectToolsAndFlags $(sysobject) ;
+	Depends $(sysobject) : $(sysinfodefs) ;
+	Depends obj : $(sysobject) ;
+
+	VMKObjects $(vsic) ;
+	ObjectToolsAndFlags $(vsiobject) ;
+
+	LibraryFromObjects libvsi : $(sysobject) $(vsiobject) ;
+
+}

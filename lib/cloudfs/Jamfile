@@ -1,0 +1,13 @@
+if ( ! $(cloudfslib) ) { cloudfslib = 1 ;
+
+SubDir TOP bora lib cloudfs ;
+
+
+SubDirHdrs $(TOP) bora modules vmkernel cloudfs ;
+SubDirHdrs $(TOP) bora modules vmkernel cloudfs httplib ;
+SubDirHdrs $(TOP) bora public ;
+SubDirHdrs $(TOP) bora lib public ;
+
+UWLibrary cloudfslib : cloudfslib.c cloudfsdb.c sqlite3.c ;
+
+}

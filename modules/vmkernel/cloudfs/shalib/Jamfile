@@ -1,0 +1,18 @@
+if ( ! $(shalib) ) { shalib = 1 ;
+
+LOCATION = bora modules vmkernel cloudfs ;
+
+SubDir TOP $(LOCATION) shalib ;
+SubDirHdrs $(TOP) $(LOCATION) ;
+
+SHA1FILES = 
+	sha1.c
+	sha1-compress.c
+	sha1-meta.c
+	;
+
+VMKLibrary libvmksha : $(SHA1FILES) ;
+UWLibrary libsha : $(SHA1FILES) ;
+
+
+}

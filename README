@@ -1,0 +1,243 @@
+
+LogFS/CloudFS log-structured, replicated file system for ESX
+============================================================
+
+
+Building with scons
+===================
+
+Build the 'cloudfs' kernel module, and the userspace tools:
+
+$ scons cloudfs replicator cloudfs
+
+Copy the kernel module to your debug ESX box:
+
+$ scp bora/build/scons/package/devel/linux32/opt/esx/vmkmod-vmkernel64-signed/cloudfs \
+  bora/build/scons/package/devel/linux32/obj/esx/apps/cloudfs/cloudfs \
+  bora/build/scons/package/devel/linux32/obj/esx/apps/replicator/replicator \
+  root@mybox:
+
+Alternative: Build with jam (YOU PROBABLY WANT TO IGNORE THIS)
+===========================
+
+Usually your Linux distro has a 'jam' or 'ftjam' package, make sure that is 
+installed.
+
+Link vmk/Jamrules to the top of your tree, e.g., 
+
+$ cd ~/src/vmkernel-main
+$ ln -s bora/modules/vmkernel/cloudfs/vmk/Jamrules .
+$ cd bora/modules/vmkernel/cloudfs
+
+Then to build everything, type:
+
+$ jam
+or for an 'opt' build:
+$ jam -sRELEASE=1
+
+The output files will be in jambuild/obj or jambuild/opt at the top of your
+tree.
+
+I use jam because it allows me to build everything in one go, and its like
+1000x faster than scons. However, scons should work as well so feel free to
+ignore this if you enjoy the little breaks during the day that building with
+scons will give you. 
+
+
+Loading the kernel module on your ESXi box
+==========================================
+
+# vmkload_mod cloudfs
+
+Format and storage from an existing partition: For my system this means:
+
+# export disk=mpx.vmhba2:C0:T0:L0:2
+# cloudfs nuke /dev/disks/${disk}
+# /sbin/vmkload_mod /bin/cloudfs 
+# /sbin/vsish -e set /vmkModules/cloudfs/device ${disk}
+
+( make sure the 'cloudfs' tool is in your path)
+
+Though we do support replica recovery after a restart, for playing with
+CloudFS it is recommended that you always 'nuke' (which just zeroes the
+beginning of the disk partition) the disk you use after restart.
+Its nice to have a blank slate when you start out.
+
+Note: If you get a permission error it may be because the partition
+type is not set to 0xfb (VMFS) in fdisk, or because VMFS had already
+formatted the partition and does not want to let go of it.
+
+Running CloudFS from a file instead of a full partition
+=======================================================
+
+You can also use load the filedriver module and use vmkmkdev to create a
+'loopback' device that points to a big file in your filesystem, to not have to
+use a full partition for CloudFS.
+
+I use the following script when running with filedriver-backed disks.
+
+vmkload_mod filedriver
+
+disk=cloudfsdevice
+
+if [ -e /vmfs/volumes/local/log ]
+then
+echo reuse existing log
+else
+dd if=/dev/zero of=log bs=100000 count=560000
+fi
+
+vmkmkdev -Y file -o /vmfs/volumes/local/log $disk
+
+
+Running the userspace replicator
+================================
+
+The cloudfs kernel module takes care of the IO path from the VMs to the local
+disk, and provides an HTTP interface that peers can connect to and clone local
+volumes.  To handle the actual placement of replicas in your cluster of
+machines, you need to run the replicator user world process. It needs as input
+a unique 160-bit host-id (like the SHA-1 hash of your MAC address or some
+completely random number, it has to stay constant across host reboots) and a
+list of host IPs that it can connect to to start assembling its network.
+
+
+Creating a new volume
+=====================
+
+Once you have that running and your hosts have had a few seconds to discover
+one another, you can try to create a new virtual disk with:
+
+# cloudfs newdisk
+e74c6b44184f639b0b3e550b044e667078905573 (the ID of your new disk)
+
+If you have less than 3 hosts, you need to force the creation of a smaller
+replica set with 
+
+# cloudfs newdisk 1 
+or
+# cloudfs newdisk 2 
+
+It should tell you on which hosts it randomly decided to create replicas,
+and write the unique volume-id for your virtual disk to stdout. If you
+are on a host that has a replica, you can check that your disk was created in
+/dev/cloudfs:
+
+# ls /dev/cloudfs/
+
+b104aec69fbb6384b678bf9f5d0209453969b8e9
+b104aec69fbb6384b678bf9f5d0209453969b8e9.info
+b104aec69fbb6384b678bf9f5d0209453969b8e9.secret
+
+
+You have now created a new virtual disk. It's size is fixed to an arbitrary constant (8GB)
+right now, but that is only because we have to report a number when the VM asks. You
+can refer to this file in your .vmdk-file, as in:
+
+
+"""
+# Disk DescriptorFile
+version=1
+CID=ffb8cc59
+parentCID=ffffffff
+createType="vmfs"
+
+# Extent description
+
+RW 20971520 VMFS "/dev/cloudfs/b104aec69fbb6384b678bf9f5d0209453969b8e9"
+# The Disk Data Base
+#DDB
+
+ddb.virtualHWVersion = "6"
+ddb.uuid = "60 00 C2 91 bf 96 ab 1a-23 d7 5f 0c 9c 9c 28 e8"
+ddb.geometry.cylinders = "5120"
+ddb.geometry.heads = "128"
+ddb.geometry.sectors = "32"
+ddb.adapterType = "lsilogic"
+"""
+
+
+- And once that is done you can start a VM using vmx.
+If you don't want to go through the trouble of booting a VM with vmx, you can also try
+cat'ing some data to the new file from the console instead.
+
+Now for the interesting part. The cloudfs vmkernel module runs a tiny HTTP server on port 8090.
+You can view the virtual disks (files) remotely. On the box, try:
+
+# wget -O- http://127.0.0.1:8090/heads
+
+(substitute the real IP of your host if doing this remotely)
+
+You will get a list of all disks (currently just the one you created) and their version 
+numbers, as in:
+
+b104aec69fbb6384b678bf9f5d0209453969b8e9:b104aec69fbb6384b678bf9f5d0209453969b8e9
+
+If the two numbers are equal, it means the disk 0 revisions. Once you have written to the 
+disk (try echo'ing or cat'ing some data to it), the numbers should be different, as in:
+
+b104aec69fbb6384b678bf9f5d0209453969b8e9:201151e19dbe1e368f7c802475edf767c65cef28
+
+The number on the left is the base version ('version 0') of the disk, and the disk's
+global UUID. The number to the right identifies the current version ('version n').
+
+To retrieve deltas from a version and to the most recent one, try:
+
+# wget -O- http://127.0.0.1:8090/stream?b104aec69fbb6384b678bf9f5d0209453969b8e9 | strings
+ 
+which should print a lot of semi-garbage, corresponding to the changes you made to the disk.
+If you have more than one ESX box configured with cloudfs, you can instead pipe the output of
+wget into the special file /dev/cloudfs/log , and you will have achieved live replication of
+your virtual disk!
+
+There is a special tool called 'replicator' that does basically the same thing, but avoids
+some bugs in busybox's wget, so this will be preferable, but wget is good for getting the
+general idea. You can run replicator (on another host), as:
+
+$ replicator <host-id> [peer-ip...]
+
+Using the POSIX shim
+====================
+
+You can choose to format volumes as VMFS3 with vmkfstools -C, to make each CloudFS volume
+a separate VMFS-backed POSIX namespace, where you can store .vmx and .swp files etc. 
+with your VM. However, CloudFS also contains a tiny and very experimental POSIX shim
+that you can use without formatting as VMFS. Here, volumes show up under 
+/vmfs/volumes/cloudfs, but as with an NFS automounter you need to do an 'ls' there 
+for them to appear.
+
+So assuming you just created the volume b104aec69fbb6384b678bf9f5d0209453969b8e9 with
+the 'cloudfs newdisk' command, try:
+
+# ls /vmfs/volumes/cloudfs/b104aec69fbb6384b678bf9f5d0209453969b8e9
+# cd /vmfs/volumes/cloudfs/b104aec69fbb6384b678bf9f5d0209453969b8e9
+# touch foo
+# ls
+
+This should work on any host running the replicator. For the first request, what will
+happen is that the cloudfs kernel module fires off an HTTP request to its local replicator
+trying to read volume b104aec69fbb6384b678bf9f5d0209453969b8e9. If the volume is 
+unknown at the local host, it will get an HTTP redirect to another host that is likely
+to be in the replica set, which is repeated until the current primary for the 
+volume is hit. From there on the hosts stay connected and data is served directly over
+HTTP GET/PUT requests. The POSIX shim is currently very bare-bones and experimental, 
+and DO NOT try to use the same volume both as a raw device and as a POSIX namespace, 
+it will probably PSOD on you if you try.
+
+
+
+
+Branches (CURRENTLY DISABLED)
+========
+
+CloudFS supports branching (snapshotting/cloning) a virtual disk. To branch
+a disk you need to know its current version id, which can be found by
+
+$ cat /dev/cloudfs/$DISK.info
+
+so what you will normally do is:
+
+$ cloudsfs branch `cat /dev/cloudfs/$DISK.info`
+
+A new writable branch with a random id will now show up under /dev/cloudfs.
+Any active replicas will notice the branch, and start mirroring it right away.
